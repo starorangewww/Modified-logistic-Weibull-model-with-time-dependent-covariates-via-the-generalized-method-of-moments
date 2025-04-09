@@ -1,0 +1,401 @@
+#Type I
+
+Censor.rate<-c()
+Uncured.rate<-c()
+Data.type1.0.2<-list()
+
+b.0<-log(2);b.1<-(-1)
+gamma.0<-0.4;gamma.1<-c(-1)
+r.1<-0.6
+alpha<-1
+
+#cox.e<-c();gmm.s<-c();logis<-c();gmm.l<-c()
+N<-100
+replicated<-5
+#R<-0.6
+#tau<-0
+#simulation
+  for(sim in Nu){
+    #sim<-1
+    #set.seed(1+sim)
+    x<-matrix(0,ncol=1,nrow=N*replicated)
+    status<-matrix(1,ncol=1,nrow=N*replicated)
+    x.0<-rnorm(N,0,sqrt(1/(1-r.1^2)))
+    #x.0<-rnorm(N,1,1)
+    x[seq(1,N*replicated,replicated),]<-x.0
+    
+    Z<-rnorm(N,0,1)
+    intercepts<-gamma.0
+    betas<-gamma.1
+    z<- Z
+    
+    #CorBinRes<-rbin(clsize=clsize,intercepts=intercepts,betas=betas,xformula = ~z, cor.matrix = cor.matrix, link = 'logit')
+    #Sim.Data<-CorBinRes$simdata
+    U<-c()
+    for(i in 1:N){
+      p.log<-exp(gamma.0+gamma.1*z[i])/(1+exp(gamma.0+gamma.1*z[i]))
+      U<-c(U,rbinom(1,1,p.log))
+    }
+    
+    y.t<-c()
+    for(WW in 1:length(Z)){
+      yy.t<-c(rep(1,replicated-1),U[WW])
+      y.t<-c(y.t,yy.t)
+    }
+    
+    x.cure<-rep(z,each=replicated)
+    #=============================
+    for(j in 1:(N)){
+      for(i in (replicated*(j-1)+2):(replicated*j)){
+        resid<-rnorm(1,0,1)
+        x[i,]<-r.1*x[(i-1),]+resid
+        #x[i,]<-x[(i-1),]
+      }}
+    
+    #myCop.clayton<-archmCopula(family ="clayton",dim=clsize*replicated,param=tau)
+    #myCop.clayton<-indepCopula(dim=clsize*replicated)
+    #surv.time<-c()
+    #for(A in 1:N){
+    #  margin.d<-c();param.wei<-list()
+    #  for(i in (clsize*replicated*(A-1)+1):(clsize*replicated*A)){
+    #    S<-c(i-clsize*replicated*(A-1))
+    #    param.wei[[S]]<-list(shape=alpha,scale=(1/exp(b.0+b.1*x[i,]))^(1/alpha))
+    #    margin.d<-c(margin.d,"weibull")
+    #  }
+    #  myMvd<-mvdc(copula=myCop.clayton,margins=margin.d,paramMargins = param.wei)
+    #  c<-rMvdc(1,myMvd)
+    #  surv.time<-c(surv.time,c)}
+    #Uncured
+    surv.time.uncured<-c()
+    for(A in 1:N){
+      for(i in (replicated*(A-1)+1):(replicated*A)){
+        surv.time.uncured<-c(surv.time.uncured,rweibull(1,shape=alpha,scale=(1/exp(b.0+b.1*x[i,]))^(1/alpha)))
+      }}
+    #
+    #combine Cured
+    surv.time.uncured[which(y.t==0)]<-rweibull(length(which(y.t==0)),shape=1,scale=240)
+    #
+    sdata<-data.frame(Surv.Time=surv.time.uncured,X=x,ID=rep(1:N,each=replicated),
+                         Time=rep(1:replicated,N),Status=status,Cure=y.t,Z=x.cure)
+    #
+    CN<-seq(0,N*replicated,replicated)[-1]
+    censor.time<-runif(N,0,0.7)
+    #
+    for(i in 1:(N)){
+      if(sdata$Cure[CN[i]]==0){if(sdata$Surv.Time[CN[i]]<censor.time[i]){
+        sdata[CN[i],5]<-0;sdata[CN[i],1]<-sdata$Surv.Time[CN[i]]}else{sdata[CN[i],5]<-0;sdata[CN[i],1]<-censor.time[i]}
+        }else{
+        if(sdata$Surv.Time[CN[i]]<censor.time[i]){sdata[CN[i],5]<-1;sdata[CN[i],1]<-sdata[CN[i],1]
+      }else{sdata[CN[i],5]<-0;sdata[CN[i],1]<-censor.time[i]}}
+    }
+    #
+    Uncured.rate<-c(Uncured.rate,table(sdata[CN,]$Cure)[2]/(N))
+    sdata.t<-sdata
+    sdata.t[,6]<-sdata.t[,5]
+    names(sdata.t)[5]<-c("status.1")
+    #head(sdata)
+    #table(sdata$status.1)
+    #sdata<-data.frame(sdata,Tstat=tstat,Tstop=tstop)
+    #####
+    Censor.rate<-c(Censor.rate,table(sdata.t[CN,]$status.1)[1]/(N))
+    #
+    #estimation
+    Data.type1.0.6[[sim]]<-sdata.t
+  }
+
+dim(Data.type1.0.6[[1000]])
+mean(Censor.rate)
+
+Censor.rate.1<-c()
+for(i in 1:1000){
+  S<-Data.type1.0.6[[i]]
+  Censor.rate.1<-c(Censor.rate.1,1-mean(S$status.1[seq(5,length(S$status.1),5)]))
+}
+mean(Censor.rate.1)
+mean(Uncured.rate)
+#
+#Type II
+
+Censor.rate<-c()
+Uncured.rate<-c()
+Data.type2.0.2<-list()
+
+b.0<-log(2);b.1<-(-1);b.2<--0.5
+gamma.0<-0.4;gamma.1<-c(-1)
+r.1<-0.2
+alpha<-2
+
+#cox.e<-c();gmm.s<-c();logis<-c();gmm.l<-c()
+N<-200
+replicated<-5
+#R<-0.6
+#tau<-0
+#simulation
+
+  for(sim in 1:1000){
+    #set.seed(1500+sim)
+    replicated<-sample(c(5,8),N,replace = T)
+    x<-matrix(0,ncol=1,nrow=N*(replicated+1))
+    status<-matrix(1,ncol=1,nrow=N*replicated)
+    x.0<-rnorm(N,0,sqrt(1/(1-r.1^2)))
+    x[seq(1,N*(replicated+1),(replicated+1)),]<-x.0
+    
+    Z<-rnorm(N,0,1)
+    
+    #intercepts<-gamma.0
+    #betas<-gamma.1
+    #z<- Z
+    
+    U<-c()
+    for(i in 1:N){
+      p.log<-exp(gamma.0+gamma.1*Z[i])/(1+exp(gamma.0+gamma.1*Z[i]))
+      U<-c(U,rbinom(1,1,p.log))
+    }
+    #CorBinRes<-rbin(clsize=clsize,intercepts=intercepts,betas=betas,xformula = ~z, cor.matrix = cor.matrix, link = 'logit')
+    #Sim.Data<-CorBinRes$simdata
+    
+    y.t<-c()
+    for(WW in 1:N){
+      yy.t<-c(rep(1,replicated-1),U[WW])
+      y.t<-c(y.t,yy.t)
+    }
+    x.cure<-rep(Z,each=replicated)
+    #=============================
+    for(j in 1:(N)){
+      for(i in ((replicated+1)*(j-1)+2):((replicated+1)*j)){
+        resid<-rnorm(1,0,1)
+        x[i,]<-r.1*x[(i-1),]+resid
+      }}
+    
+    #myCop.clayton<-archmCopula(family ="clayton",dim=clsize*replicated,param=tau)
+    #myCop.clayton<-indepCopula(dim=clsize*replicated)
+    #surv.time<-c()
+    #for(A in 1:N){
+    #  A<-1
+    #  margin.d<-c();param.wei<-list()
+    #  for(i in (clsize*replicated*(A-1)+2):(clsize*replicated*A)){
+    #    S<-c(i-clsize*replicated*(A-1))
+    #    param.wei[[S]]<-list(shape=alpha,scale=(1/exp(b.0+b.1*x[i,]+b.2*x[i-1,]))^(1/alpha))
+    #    margin.d<-c(margin.d,"weibull")
+    #  }
+    #  myMvd<-mvdc(copula=myCop.clayton,margins=margin.d,paramMargins = param.wei)
+    #  c<-rMvdc(1,myMvd)
+    #  surv.time<-c(surv.time,c)}
+    #uncured
+    surv.time.uncured<-c()
+    for(A in 1:(N)){
+      #bi<-rnorm(1,0,2)
+      bi<-0
+      for(i in ((replicated+1)*(A-1)+2):((replicated+1)*A)){
+        surv.time.uncured<-c(surv.time.uncured,rweibull(1,shape=alpha,scale=(1/exp(b.0+b.1*x[i,]+b.2*x[i-1,]+bi))^(1/alpha)))
+      }}
+    #Cured for last time
+    surv.time.uncured[which(y.t==0)]<-rweibull(length(which(y.t==0)),shape=1,scale=240)
+    #surv.time.uncured[which(y.t==0)]<-rweibull(length(which(y.t==0)),shape=13.66,scale=350.16)
+    #length(surv.time)
+    x.21<-x[-seq(1,N*(replicated+1),(replicated+1)),]
+    #surv.time
+    sdata<-data.frame(Surv.Time=surv.time.uncured,X=x.21,ID=rep(1:N,each=replicated),
+                      Time=rep(1:replicated,N),Status=status,Cure=y.t,Z=x.cure)
+    #
+    CN<-seq(0,N*replicated,replicated)[-1]
+    Uncured.rate<-c(Uncured.rate,table(sdata[CN,]$Cure)[2]/(N))
+    
+    #censor.time<-runif(N,0,0.7)
+    censor.time<-runif(N,0,12)
+    #
+    for(i in 1:(N)){
+      if(sdata$Cure[CN[i]]==0){if(sdata$Surv.Time[CN[i]]<censor.time[i]){
+        sdata[CN[i],5]<-0;sdata[CN[i],1]<-sdata$Surv.Time[CN[i]]}else{sdata[CN[i],5]<-0;sdata[CN[i],1]<-censor.time[i]}
+      }else{
+        if(sdata$Surv.Time[CN[i]]<censor.time[i]){sdata[CN[i],5]<-1;sdata[CN[i],1]<-sdata[CN[i],1]
+        }else{sdata[CN[i],5]<-0;sdata[CN[i],1]<-censor.time[i]}}
+    }
+    #
+    names(sdata)[5]<-c("status.1")
+    #head(sdata)
+    #table(sdata$status.1)
+    #sdata<-data.frame(sdata,Tstat=tstat,Tstop=tstop)
+    #####
+    Censor.rate<-c(Censor.rate,table(sdata[CN,]$status.1)[1]/(N))
+    #
+    X.D<-matrix(0,ncol=replicated,nrow=c(N*replicated))
+    sque<-c(1:c(N*replicated));sque.1<-c(1:c(N*replicated))
+    #
+    X.D[sque,1]<-sdata$X[sque.1]
+    for(i in 0:(replicated-2)){
+      (sque<-sque[-seq(replicated-i,c(N*replicated),(replicated-i))])
+      (sque.1<-sque.1[-seq(1,c(N*replicated),(replicated-i))])
+      X.D[sque,(i+2)]<-sdata$X[sque.1]
+    }
+    sdata<-cbind(sdata,X.D[,c(1:c(replicated))])
+    sdata[,6]<-sdata[,5]
+    #
+    #estimation
+    sdata.t<-sdata
+    Data.type2.0.2[[sim]]<-sdata.t
+  }
+
+dim(Data.type2.0.2[[1000]])
+mean(Censor.rate)
+
+Censor.rate.1<-c()
+for(i in 1:1000){
+  S<-Data.type2.0.6[[i]]
+  Censor.rate.1<-c(Censor.rate.1,1-mean(S$status.1[seq(8,length(S$status.1),8)]))
+}
+mean(Censor.rate.1)
+mean(Uncured.rate)
+
+#Compute censored rate
+Censor.rate<-c()
+N<-200
+#clsize<-1
+replicated<-8
+
+for(sim in 1:1000){
+  print(sim)
+  sdata.t<-Data.type2.0.6[[sim]]
+  CN<-seq(0,N*replicated,replicated)[-1]
+  Censor.rate<-c(Censor.rate,table(sdata.t[CN,]$status.1)[2]/(N))
+}
+mean(Censor.rate)
+
+
+#replicated time doesn't be fixed
+Censor.rate<-c()
+Uncured.rate<-c()
+Data.type2.0.6<-list()
+
+b.0<-log(2);b.1<-(-1);b.2<--0.5
+gamma.0<-0.4;gamma.1<-c(-1)
+r.1<-0.2
+alpha<-1
+
+#cox.e<-c();gmm.s<-c();logis<-c();gmm.l<-c()
+N<-100
+#replicated<-5
+#R<-0.6
+#tau<-0
+#simulation
+
+for(sim in 1:1000){
+  #set.seed(1500+sim)
+  replicated<-sample(c(5,8),N,replace = T)
+  #x<-matrix(0,ncol=1,nrow=N*(replicated+1))
+  x<-matrix(0,ncol=1,nrow=sum(replicated+1))
+  #status<-matrix(1,ncol=1,nrow=N*replicated)
+  status<-matrix(1,ncol=1,nrow=sum(replicated))
+  x.0<-rnorm(N,0,sqrt(1/(1-r.1^2)))
+  x[c(1,(cumsum(replicated+1)+1)[-N]),]<-x.0
+  Z<-rnorm(N,0,1)
+  
+  #intercepts<-gamma.0
+  #betas<-gamma.1
+  #z<- Z
+  
+  U<-c()
+  for(i in 1:N){
+    p.log<-exp(gamma.0+gamma.1*Z[i])/(1+exp(gamma.0+gamma.1*Z[i]))
+    U<-c(U,rbinom(1,1,p.log))
+  }
+  #CorBinRes<-rbin(clsize=clsize,intercepts=intercepts,betas=betas,xformula = ~z, cor.matrix = cor.matrix, link = 'logit')
+  #Sim.Data<-CorBinRes$simdata
+  
+  y.t<-c()
+  for(WW in 1:N){
+    #yy.t<-c(rep(1,replicated-1),U[WW])
+    yy.t<-c(rep(1,replicated[WW]-1),U[WW])
+    y.t<-c(y.t,yy.t)
+  }
+  #x.cure<-rep(Z,each=replicated)
+  x.cure<-rep(Z,replicated)
+  #=============================
+  start.o<-c(2,(cumsum(replicated+1)+2)[-N])
+    end.o<-cumsum(replicated+1)
+  for(j in 1:(N)){
+    for(i in start.o[j]:end.o[j]){
+      resid<-rnorm(1,0,1)
+      x[i,]<-r.1*x[(i-1),]+resid
+    }}
+  
+  surv.time.uncured<-c()
+  for(A in 1:(N)){
+    #bi<-rnorm(1,0,2)
+    bi<-0
+    for(i in start.o[A]:end.o[A]){
+      surv.time.uncured<-c(surv.time.uncured,rweibull(1,shape=alpha,scale=(1/exp(b.0+b.1*x[i,]+b.2*x[i-1,]+bi))^(1/alpha)))
+    }}
+  #Cured for last time
+  #surv.time.uncured[which(y.t==0)]<-rweibull(length(which(y.t==0)),shape=1,scale=240)
+  #Fitted by average expectancy life of world
+  #surv.time.uncured[which(y.t==0)]<-rweibull(length(which(y.t==0)),shape=13.66,scale=350.16)
+  surv.time.uncured[which(y.t==0)]<-rweibull(length(which(y.t==0)),shape=13,scale=350)
+  #length(surv.time)
+  x.21<-x[-c(1,(cumsum(replicated+1)+1)[-N]),]
+  #surv.time
+  sdata<-data.frame(Surv.Time=surv.time.uncured,X=x.21,ID=rep(1:N,replicated),
+                    Time=unlist(sapply(1:N,function(i)rep(1:replicated[i]))),Status=status,Cure=y.t,Z=x.cure)
+  #
+  CN<-cumsum(replicated)
+  Uncured.rate<-c(Uncured.rate,table(sdata[CN,]$Cure)[2]/(N))
+  
+  #censor.time<-runif(N,0,0.7)
+  censor.time<-runif(N,0,12)
+  #
+  for(i in 1:(N)){
+    if(sdata$Cure[CN[i]]==0){if(sdata$Surv.Time[CN[i]]<censor.time[i]){
+      sdata[CN[i],5]<-0;sdata[CN[i],1]<-sdata$Surv.Time[CN[i]]}else{sdata[CN[i],5]<-0;sdata[CN[i],1]<-censor.time[i]}
+    }else{
+      if(sdata$Surv.Time[CN[i]]<censor.time[i]){sdata[CN[i],5]<-1;sdata[CN[i],1]<-sdata[CN[i],1]
+      }else{sdata[CN[i],5]<-0;sdata[CN[i],1]<-censor.time[i]}}
+  }
+  #
+  names(sdata)[5]<-c("status.1")
+  #head(sdata)
+  #table(sdata$status.1)
+  #sdata<-data.frame(sdata,Tstat=tstat,Tstop=tstop)
+  #####
+  Censor.rate<-c(Censor.rate,table(sdata[CN,]$status.1)[1]/(N))
+  #
+  #X.D<-matrix(0,ncol=replicated,nrow=c(N*replicated))
+  #sque<-c(1:c(N*replicated));sque.1<-c(1:c(N*replicated))
+  #
+  #X.D[sque,1]<-sdata$X[sque.1]
+  #for(i in 0:(replicated-2)){
+  #  (sque<-sque[-seq(replicated-i,c(N*replicated),(replicated-i))])
+  #  (sque.1<-sque.1[-seq(1,c(N*replicated),(replicated-i))])
+  #  X.D[sque,(i+2)]<-sdata$X[sque.1]
+  #}
+  #sdata<-cbind(sdata,X.D[,c(1:c(replicated))])
+  sdata[,6]<-sdata[,5]
+  #
+  #estimation
+  sdata.t<-sdata
+  Data.type2.0.6[[sim]]<-sdata.t
+}
+
+dim(Data.type2.0.6[[3]])
+mean(Censor.rate)
+
+Censor.rate.1<-c()
+for(i in 1:1000){
+  S<-Data.type2.0.6[[i]]
+  Censor.rate.1<-c(Censor.rate.1,1-mean(S$status.1[seq(8,length(S$status.1),8)]))
+}
+mean(Censor.rate.1)
+mean(Uncured.rate)
+
+#Compute censored rate
+Censor.rate<-c()
+N<-200
+#clsize<-1
+replicated<-8
+
+for(sim in 1:1000){
+  print(sim)
+  sdata.t<-Data.type2.0.6[[sim]]
+  CN<-seq(0,N*replicated,replicated)[-1]
+  Censor.rate<-c(Censor.rate,table(sdata.t[CN,]$status.1)[2]/(N))
+}
+mean(Censor.rate)
