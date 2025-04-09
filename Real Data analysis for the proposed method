@@ -1,0 +1,549 @@
+library(survival)
+library(gmm)
+library(gee)
+library(survminer)
+#===========time dependent===========
+Data.1<-read.csv(file.choose())
+names(Data.1)
+Data.1.2.1<-Data.1[-which(Data.1$status==1),]
+length(table(Data.1$id))
+
+Data.1.2<-Data.1.2.1
+length(table(Data.1.2$id))
+dim(Data.1.2)
+names(Data.1.2)
+#
+sdata<-data.frame(Surv.T=Data.1.2[,14],status.1=Data.1.2[,3],ID=Data.1.2[,1],X=Data.1.2[,10],XX.1=Data.1.2[,11],XX.2=Data.1.2[,12],XX.3=Data.1.2[,13]
+                  ,Cure=Data.1.2[,3],Trt=Data.1.2[,4],Age=Data.1.2[,5],Stage=Data.1.2[,7],Surv.TT=Data.1.2[,2])
+dim(sdata)
+names(sdata)
+head(sdata)
+
+colMeans(is.na(sdata))
+
+#Normalization
+for(w in levels(factor(sdata[,3]))){
+  sdata[sdata$ID==w,4]<-scale(sdata[sdata$ID==w,4],center=T,scale=T)
+  sdata[sdata$ID==w,5]<-scale(sdata[sdata$ID==w,5],center=T,scale=T)
+  sdata[sdata$ID==w,6]<-scale(sdata[sdata$ID==w,6],center=T,scale=T)
+  sdata[sdata$ID==w,7]<-scale(sdata[sdata$ID==w,7],center=T,scale=T)
+}
+
+colMeans(is.na(sdata))
+sdata<-sdata[-which(sdata$X=="NaN"),]
+length(table(sdata$ID))
+colMeans(is.na(sdata))
+#Correlation
+for(i in 4:7){
+  for(j in i:7)
+print(cor.test(sdata[,i],sdata[,j]))
+}
+#gee
+for(i in 4:7){
+  for(j in i:7)
+    
+S<-gee(sdata[,i]~sdata[,j],id=factor(sdata[,3]),corstr="AR-M",family="gaussian")
+print(summary(S))
+
+}
+
+S<-gee(sdata[,4]~sdata[,7],id=factor(sdata[,3]),corstr="AR-M",family="gaussian")
+print(summary(S))
+2*(1-pnorm(abs(-2.251008)))
+
+#==========Data collation=========================
+V<-factor(sdata$ID)
+##as.character(levels(V) is equal to names(table(sdata$ID))
+V.1<-as.character(levels(V))
+CN.1<-c()
+#censor & cure
+for(w in V.1){
+  Status.1<-sdata[which(sdata$ID==w),]
+  if(Status.1[dim(Status.1)[1],2]==2){Status.1[,c(2,8)]<-c(rep(1,dim(Status.1)[1]-1),1)}else{
+    Status.1[,c(2,8)]<-c(rep(1,dim(Status.1)[1]-1),0)}
+  sdata[which(sdata$ID==w),]<-Status.1
+  CN.1<-c(CN.1,dim(Status.1)[1])
+}
+#trt
+#sdata
+sdata[which(sdata$Trt==2),9]<-0
+table(sdata$Trt)
+#stage dummy variables #later:1 ; early:0
+
+for(W in 1:dim(sdata)[1]){
+  if(sdata[W,11]=="1"|sdata[W,11]=="2"){sdata[W,11]<-0}else{sdata[W,11]<-1}
+}
+head(sdata)
+#
+#sdata[1:10,]
+#names(sdata)
+#Gender
+#Gender<-c()
+#for(S in 1:dim(sdata)[1]){
+#  if(sdata[S,11]=="f"){Gender<-c(Gender,0)}else{Gender<-c(Gender,1)}
+#}
+#sdata[,11]<-Gender
+#============================================
+#interaction
+#sdata[,11]<-sdata[,9]*sdata[,10]
+#names(sdata)[11]<-c("intercation")
+
+#======Last time=================================
+CN.2<-c(2)
+for(i in 2:length(CN.1)){
+  CN.2<-c(CN.2,CN.1[i]+CN.2[i-1])
+}
+CN.2
+
+mean(CN.1)
+
+#Data
+#K-M estimator
+sdata.1<-sdata[CN.2,]
+#overall
+fit.1 = survfit(Surv(Surv.TT,status.1)~1,data=sdata.1)
+ggsurvplot(fit.1,risk.table = F,risk.table.y.text.col = F,conf.int = FALSE)+xlab("Days")
+
+sdata.1.1<-sdata.1[sdata.1$status.1==1,]
+fit.1 = survfit(Surv(Surv.T,status.1)~Trt, data=sdata.1.1)
+fit.1 = survfit(Surv(Surv.T,status.1)~Stage, data=sdata.1.1)
+#
+fit.1 = survfit(Surv(Surv.TT,status.1)~Trt, data=sdata.1)
+fit.1 = survfit(Surv(Surv.TT,status.1)~Stage, data=sdata.1)
+
+#ggsurvplot(fit.1,risk.table = TRUE,risk.table.y.text.col = TRUE)
+#ggsurvplot(fit.1,palette="grey",risk.table = F,risk.table.y.text.col = F,pval = F)
+ggsurvplot(fit.1,risk.table = F,risk.table.y.text.col = F,pval = T,
+           font.x = c(26, face = "bold"),font.y = c(26, face = "bold"),
+           pval.size=10,font.tickslab = c(24))
+
+
+
+#
+sdata.test<-sdata[,c(1,2,3,4,7,8,9,10,11)]
+which(sdata.test$ID==names(table(sdata.test$ID))[1])
+head(sdata.test)
+table(sdata.test$Trt)
+table(sdata.test$Trt[CN.2],sdata.test$status.1[CN.2])
+chisq.test(table(sdata.test$Trt,sdata.test$status.1))
+
+mean(sdata.test$Age)
+mean(sdata.test[sdata.test$status.1==0,8])
+#mean(sdata.test[CN.2,8])
+
+coxph(Surv(Surv.T,status.1)~X+XX.3+Age+Trt+Stage,data=sdata.test)
+
+#head(sdata.test)
+#trt: col.7(1) Age:col.8(2) Stage: col.9(3)
+#
+#---------Cure----------------------------
+
+moments.g.1<-function(theta,data){
+  y<-as.matrix(data[,6],ncol=1)
+  Q<-data.matrix(data[,7:9])
+  theta.1<-matrix(theta,ncol=1)
+  Q<-cbind(1,Q)
+  mu<-exp(Q%*%theta.1)
+  G<-c(y-mu/(1+mu))*Q
+  #G.1<-cbind(G,c(y-mu/(1+mu)))
+  return(G)
+}
+#--------Survival-----------------------------
+moments.G1<-function(theta,data){
+  alpha.u1<-alpha.u
+  y<-matrix(data[,1],ncol=1)
+  x<-data.matrix(data[,c(4,5,7,9)])
+  #
+  Wi<-matrix(data[,6],ncol=1)
+  theta.1<-matrix(theta,ncol=1)
+  status<-data[,2]
+  G<-matrix(0,ncol=1,nrow=dim(data)[1])
+  q.1<-cbind(1,x)
+  q.2<-(data[,-c(1:9)])
+  mu<-q.1%*%theta.1
+  G<-c(status-(exp(mu)*(y)^(alpha.u1)))
+  G.1<-c(Wi)*c(G)
+  G.2<-c(G.1)*q.2
+  return(G.2)
+  #Another one 
+  #G.2.1<-c()
+  #for(i in 1:length(table(data[,3]))){G.2.1<-rbind(G.2.1,apply(G.2[which(data[,3]==names(table(data[,3]))[i]),],2,sum))}
+  #return(G.2.1)
+}
+
+#==========
+moments.alpha<-function(theta,data){
+  y<-matrix(data[,1],ncol=1)
+  x<-data.matrix(data[,c(4,5,7,9)])
+  Wi<-matrix(data[,6],ncol=1)
+  theta.1<-matrix(theta,ncol=1)
+  status<-data[,2]
+  x.1<-rep(1,dim(data)[1])
+  q.1<-cbind(x.1,x)
+  G.A<-(log(y)*(Wi*status-Wi*(y^(theta))*exp(q.1%*%Beta.b))+status/theta)
+  return(G.A)
+}
+#=====censor========================
+table(sdata[CN.2,]$status.1)[1]/(table(sdata[CN.2,]$status.1)[1]+table(sdata[CN.2,]$status.1)[2])
+#Early and later
+#table(sdata[CN.2,11])
+
+#
+#estimation
+
+sdata.t<-sdata.test
+names(table(sdata.t$ID))
+q.1<-cbind(1,sdata.t[,c(4,5,7,9)])
+
+#Mean Full matrix
+#names(table(sdata.t$ID))
+#q.2<-c()
+#for(i in names(table(sdata.t$ID))){q.2<-rbind(q.2,t(rep(apply(data.matrix(q.1[which(sdata.t$ID==i),]),2,mean),length(which(sdata.t$ID==i)))))}
+
+#Mean low-triangle matrix
+#q.2<-c()
+#names(table(sdata.t$ID))
+#for(i in names(table(sdata.t$ID))){q.2<-rbind(q.2,t(sapply(which(sdata.t$ID==i),function(j) apply(data.matrix(q.1[j:max(which(sdata.t$ID==i)),]),2,sum))))}
+#dim(q.2)
+#head(q.2)
+#For sum low-triangle matrix, adjust discrete variable
+#q.2[,c(4)]<-sdata.test[,c(7)]
+#q.2[,c(6)]<-sdata.test[,c(9)]
+
+#identity matrix
+q.2<-data.matrix(q.1)
+#
+sdata.t<-cbind(sdata.t,q.2)
+sdata.t[which(sdata.t$status.1==0),6]<-0.5
+
+alpha.u<-0.95
+my_gmm.2<-gmm(moments.G1,x=sdata.t,t0=c(0,0,0,0,0),type="iterative",wmatrix = "optimal",
+              method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+
+(beta.00<-my_gmm.2$coefficients)
+sdata.t.2<-sdata.t[CN.2,]
+my_gmm.1<-gmm(moments.g.1,x=sdata.t.2,t0=c(0,0,0,0),type="iterative",wmatrix = "optimal",
+              method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+(gamma.00<-my_gmm.1$coefficients)
+
+#
+#estimation of parameters
+K.1<-0
+while(1){
+  Wi<-sapply(1:dim(sdata.t)[1],function(i){
+    S3<-exp(-exp(beta.00[1]+beta.00[2]*sdata.t$X[i]+beta.00[3]*sdata.t$XX.3[i]+
+                   beta.00[4]*sdata.t$Trt[i]+beta.00[5]*sdata.t$Stage[i])*(sdata.t$Surv.T[i]^alpha.u))
+    pi<-exp(gamma.00[1]+gamma.00[2]*sdata.t$Trt[i]+
+            gamma.00[3]*sdata.t$Age[i]+gamma.00[4]*sdata.t$Stage[i])
+    S.h<-exp(-sdata.t$Surv.T[i]/7300)
+    #S.h<-1
+    sdata.t$status.1[i]+((1-sdata.t$status.1[i])*pi*(S3)/((S.h)+(pi*S3)))
+  })
+  sdata.t$Cure<-Wi
+  #surivival
+  #beta.00
+  my_gmm.5<-gmm(moments.G1,x=sdata.t,t0=beta.00,type="iterative",wmatrix = "optimal",
+                method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+  (beta.001<-my_gmm.5$coefficients)
+  #Cure
+  sdata.t.2<-sdata.t[CN.2,]
+  #gamma.00
+  my_gmm.4<-gmm(moments.g.1,x=sdata.t.2,t0=gamma.00,type="iterative",wmatrix = "optimal",
+                method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+  (gamma.001<-my_gmm.4$coefficients)
+  
+  Beta.b<-matrix(beta.001,ncol=1)
+  #x<-as.matrix(sdata.t[,c(4,7)])
+  #x.1<-rep(1,dim(sdata.t)[1])
+  #q.1<-cbind(x.1,x)
+  #alpha.S<--sum(sdata.t$status)/sum(Wi*log(sdata.t$Surv.T)*(sdata.t$status-(sdata.t$Surv.T^alpha.u)*exp(q.1%*%Beta.b)))
+  my_gmm.3<-gmm(moments.alpha,x=sdata.t,t0=c(alpha.u),optfct=c("nlminb"))
+  (alpha.S<-my_gmm.3$coefficients)
+  #
+  if(max(abs(beta.001[-1]-beta.00[-1]))<1e-03&max(abs(gamma.001[-1]-gamma.00[-1]))<1e-03|K.1>100)
+    break
+  beta.00<-beta.001
+  gamma.00<-gamma.001
+  alpha.u<-alpha.S
+  K.1<-K.1+1
+  print(beta.001)
+  print(gamma.001)
+  print(K.1)
+}
+
+K.1
+(alpha.11<-alpha.S)
+(Beta.001<-beta.001)
+(Gamma.001<-gamma.001)
+
+
+#
+#Sandwitch
+Z.t.1<-data.matrix(cbind(1,sdata.t[CN.2,c(7:9)]))
+X.t.1<-data.matrix(cbind(1,sdata.t[,c(4,5,7,8,9)]))
+X.t.2<-q.2
+#X.t.1<-data.matrix(cbind(1,sdata.t[,8]))
+gamma.11<-matrix(gamma.001,ncol=1)
+beta.11<-matrix(beta.001,ncol=1)
+alpha.t.S1<-alpha.S
+pi<-exp(Z.t.1%*%gamma.11)/(1+exp(Z.t.1%*%gamma.11))
+#Bread 1
+G1.sec<-0;B1.sec<-0;B2.sec<-0;A1.sec<-0;A2.sec<-0
+##cured
+N<-length(CN.2)
+for(i in 1:N){
+  pi.sec.t<--(matrix(Z.t.1[i,],ncol=1)%*%matrix(Z.t.1[i,],nrow=1))*pi[i]*(1-pi[i])
+  G1.sec<-G1.sec+pi.sec.t
+}
+##survival
+for(i in 1:dim(sdata.t)[1]){
+  B1.sec.t<--sdata.t$Cure[i]*(matrix(X.t.2[i,],ncol=1)%*%matrix(X.t.1[i,],nrow=1))*(sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))
+  B1.sec<-B1.sec+B1.sec.t
+  B2.sec.t<--sdata.t$Cure[i]*matrix(X.t.2[i,],ncol=1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))*(sdata.t$Surv.T[i]^alpha.t.S1)*log(sdata.t$Surv.T[i])
+  B2.sec<-B2.sec+B2.sec.t
+  A1.sec.t<--sdata.t$Cure[i]*(sdata.t$Surv.T[i]^alpha.t.S1)*log(sdata.t$Surv.T[i])*matrix(X.t.1[i,],nrow=1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))
+  A1.sec<-A1.sec+A1.sec.t
+  A2.sec.t<--sdata.t$Cure[i]*((log(sdata.t$Surv.T[i]))^2)*(sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))-(sdata.t$status.1[i]/(alpha.t.S1^2))
+  A2.sec<-A2.sec+A2.sec.t
+}
+Bread.t1<-cbind(G1.sec,matrix(0,nrow=dim(Z.t.1)[2],ncol=dim(X.t.1)[2]),matrix(0,nrow=dim(Z.t.1)[2],ncol=1))
+Bread.t2<-cbind(matrix(0,nrow=dim(X.t.1)[2],ncol=dim(Z.t.1)[2]),B1.sec,B2.sec)
+Bread.t3<-cbind(matrix(0,nrow=1,ncol=dim(Z.t.1)[2]),A1.sec,A2.sec)
+BREAD<-rbind(Bread.t1,Bread.t2,Bread.t3)
+#
+#Bread 2
+##cured
+GG.sec<-0;GB.sec<-0;GA.sec<-0;BB.sec<-0;BA.sec<-0;AA.sec<-0
+for(i in 1:N){
+  GG.sec.t<-matrix(Z.t.1[i,],ncol=1)%*%matrix(Z.t.1[i,],nrow=1)*(sdata.t$Cure[CN.2[i]]*(1-sdata.t$Cure[CN.2[i]]))
+  GG.sec<-GG.sec+GG.sec.t
+  GB.sec.t<-matrix(Z.t.1[i,],ncol=1)%*%matrix(X.t.2[CN.2[i],],nrow=1)*(sdata.t$Cure[CN.2[i]]*(1-sdata.t$Cure[CN.2[i]]))*(sdata.t$status.1[CN.2[i]]-(sdata.t$Surv.T[CN.2[i]]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[CN.2[i],],ncol=1))))
+  GB.sec<-GB.sec+GB.sec.t
+  GA.sec.t<-matrix(Z.t.1[i,],ncol=1)%*%(sdata.t$Cure[CN.2[i]]*(1-sdata.t$Cure[CN.2[i]]))*log(sdata.t$Surv.T[CN.2[i]])*(sdata.t$status.1[CN.2[i]]-((sdata.t$Surv.T[CN.2[i]]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[CN.2[i],],ncol=1))))+(sdata.t$status.1[CN.2[i]]/alpha.t.S1))
+  GA.sec<-GA.sec+GA.sec.t
+}
+##Survival
+#for(i in 1:dim(sdata.t)[1]){
+#  BB.sec.t<-(c((sdata.t$status.1[i]-((sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))))^2)*c(sdata.t$Cure[i]*(1-sdata.t$Cure[i])))*matrix(X.t.2[i,],ncol=1)%*%matrix(X.t.2[i,],nrow=1)
+#  BB.sec<-BB.sec+BB.sec.t
+#  BA.sec.t<-matrix(X.t.2[i,],ncol=1)*((sdata.t$status.1[i]-((sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1))))))*
+#    ((sdata.t$status.1[i]-((sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1))))+sdata.t$status.1[i]/alpha.t.S1))*(sdata.t$Cure[i]*(1-sdata.t$Cure[i]))*log(sdata.t$Surv.T[i])
+#  BA.sec<-BA.sec+BA.sec.t
+#  AA.sec.t<-((log(sdata.t$Surv.T[i])*(sdata.t$status.1[i]-((sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))))+sdata.t$status.1[i]/alpha.t.S1)^2)*(sdata.t$Cure[i]*(1-sdata.t$Cure[i]))
+#  AA.sec<-AA.sec+AA.sec.t
+#}
+COV.Matrix<-function(prob.v){
+  W<-prob.v
+  D1<-matrix(sqrt(W*(1-W)),ncol=1)%*%t(matrix(sqrt(W*(1-W)),ncol=1))
+  return(D1)
+}
+for(i in c(names(table(sdata.t$ID)))){
+  #BB
+  BB.b<-sapply(which(sdata.t$ID==i),function(g)
+    t(X.t.2[g,]*(sdata.t$status.1[g]-((sdata.t$Surv.T[g]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[g,],ncol=1)))))))
+  
+  BB.v<-COV.Matrix(sdata.t$Cure[which(sdata.t$ID==i)])
+  BB.sec.t<-BB.b%*%BB.v%*%t(BB.b)
+  BB.sec<-BB.sec+BB.sec.t
+  #BA
+  BA.b2<-sapply(which(sdata.t$ID==i),function(g)
+    log(sdata.t$Surv.T[g])*(sdata.t$status.1[g]-((sdata.t$Surv.T[g]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[g,],ncol=1)))))+sdata.t$status.1[g]/alpha.t.S1)
+  BA.b2<-matrix(BA.b2,nrow=1)
+  BA.sec.t<-BB.b%*%BB.v%*%t(BA.b2)
+  BA.sec<-BA.sec+BA.sec.t
+  #AA
+  AA.sec.t<-BA.b2%*%BB.v%*%t(BA.b2)
+  AA.sec<-AA.sec+AA.sec.t
+}
+
+Bread2.t1<-cbind(GG.sec,GB.sec,GA.sec)
+Bread2.t2<-cbind(t(GB.sec),BB.sec,BA.sec)
+Bread2.t3<-cbind(t(GA.sec),t(BA.sec),AA.sec)
+BREAD2<-rbind(Bread2.t1,Bread2.t2,Bread2.t3)
+#
+#Meat
+##Cured
+Meat.1<-0
+pi.h<-rep(1,dim(sdata.t)[1])
+pi.h[CN.2]<-pi
+Z.t.1.h<-cbind(1,rep(Z.t.1[,2],c(as.numeric(table(sdata.t$ID)))),rep(Z.t.1[,3],c(as.numeric(table(sdata.t$ID)))),rep(Z.t.1[,4],c(as.numeric(table(sdata.t$ID)))))
+#Z.t.1.h<-cbind(1,rep(Z.t.1[,2],c(as.numeric(table(sdata.t$ID)))),rep(Z.t.1[,3],c(as.numeric(table(sdata.t$ID)))))
+#for(i in 1:dim(sdata.t)[1]){
+#  G1.first<-Z.t.1.h[i,]*(sdata.t$Cure[i]-pi.h[i])
+#  B1.first<-sdata.t$Cure[i]*matrix(X.t.2[i,],ncol=1)*(sdata.t$status.1[i]-((sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))))
+#  A1.first<-sdata.t$Cure[i]*log(sdata.t$Surv.T[i])*(sdata.t$status.1[i]-((sdata.t$Surv.T[i]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[i,],ncol=1)))))+(sdata.t$status.1[i]/alpha.t.S1)
+#  Meat.t<-matrix(c(G1.first,B1.first,A1.first),ncol=1)
+#  Meat.1<-Meat.1+(Meat.t%*%t(Meat.t))
+#}
+#
+for(i in names(table(sdata.t$ID))){
+  G1.first<-sapply(which(sdata.t$ID==i),function(g)
+    Z.t.1.h[g,]*(sdata.t$Cure[g]-pi.h[g]))
+  G1.first<-apply(G1.first,1,sum)
+  
+  B1.first<-sapply(which(sdata.t$ID==i),function(g)
+    sdata.t$Cure[g]*matrix(X.t.2[g,],ncol=1)*(sdata.t$status.1[g]-((sdata.t$Surv.T[g]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[g,],ncol=1)))))
+  )
+  B1.first<-apply(B1.first,1,sum)
+  
+  A1.first<-sapply(which(sdata.t$ID==i),function(g)(
+    sdata.t$Cure[g]*log(sdata.t$Surv.T[g])*(sdata.t$status.1[g]-((sdata.t$Surv.T[g]^alpha.t.S1)*c(exp(t(beta.11)%*%matrix(X.t.1[g,],ncol=1)))))+(sdata.t$status.1[g]/alpha.t.S1)
+  ))
+  A1.first<-sum(A1.first)
+  Meat.t<-matrix(c(G1.first,B1.first,A1.first),ncol=1)
+  Meat.1<-Meat.1+(Meat.t%*%t(Meat.t))
+}
+estimated.V<-(solve(-BREAD-BREAD2)%*%(Meat.1)%*%t(solve(-BREAD-BREAD2)))
+#estimated.V<-(solve(BREAD)%*%(Meat.1)%*%solve(BREAD))
+(var.SW<-sqrt(diag(estimated.V)))
+#(var.SW<-(diag(estimated.V)))
+
+#estimate
+alpha.11
+#sqrt(apply(my_gmm.tt,2,var)[8])
+#sqrt(var.SW)[8]
+#t.a<-alpha.11/sqrt(var.SW)[8]
+t.a<-alpha.11/var.SW[10]
+2*(1-pnorm(abs(t.a)))
+
+Beta.001
+#variance
+#beta.V<-apply(my_gmm.tt,2,var)[c(4:7)]
+#(beta.V<-sqrt(var.SW)[c(4:5)])
+
+#p value
+t.1<-Beta.001/var.SW[5:9]
+2*(1-pnorm(abs(t.1[1])))
+2*(1-pnorm(abs(t.1[2])))
+2*(1-pnorm(abs(t.1[3])))
+2*(1-pnorm(abs(t.1[4])))
+2*(1-pnorm(abs(t.1[5])))
+# 
+#estimate
+Gamma.001
+#variance
+#gamma.V<-apply(my_gmm.tt,2,var)[c(1:3)]
+#(gamma.V<-sqrt(var.SW)[c(1:3)])
+
+#p value
+t.2<-Gamma.001/var.SW[1:4]
+
+2*(1-pnorm(abs(t.2[1])))
+2*(1-pnorm(abs(t.2[2])))
+2*(1-pnorm(abs(t.2[3])))
+2*(1-pnorm(abs(t.2[4])))
+
+#bootstap
+
+#bootstrap
+sdata.t<-sdata
+my_gmm.tt<-c()
+for(j in 1:100){
+  set.seed(1+j)
+  tryCatch({
+    while(1){
+    var.n<-sample(V.1,replace = T)
+    sdata.t.1<-c()
+    CN.01<-c()
+    for(w in var.n){
+      sdata.t.11<-sdata.t[sdata.t$ID==w,]
+      sdata.t.1<-rbind(sdata.t.1,sdata.t.11)
+      CN.01<-c(CN.01,dim(sdata.t.11)[1])
+    }
+    #sdata.t.1$Cure<-sdata.t.1$status.1
+    #===========================
+    CN.02<-c(CN.01[1])
+    for(i in 2:length(CN.01)){
+      CN.02<-c(CN.02,CN.01[i]+CN.02[i-1])
+    }
+    #=========================
+    alpha.u<-1.2
+    #survival
+    my_gmm.b2<-gmm(moments.G1,x=sdata.t.1,t0=c(0,0),type="iterative",wmatrix = "optimal",
+                   method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+    (beta.b.00<-my_gmm.b2$coefficients)
+    #cure
+    sdata.t.1.2<-sdata.t.1[CN.02,]
+    my_gmm.b1<-gmm(moments.g.1,x=sdata.t.1.2,t0=c(0,0,0),type="iterative",wmatrix = "optimal",
+                   method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+    (gamma.b.00<-my_gmm.b1$coefficients)
+    #alpha
+    K.2<-0
+    while(1){
+      Wi<-sapply(1:dim(sdata.t.1)[1],function(i){
+        #S3<-exp(-exp(beta.b.00[1]+beta.b.00[2]*sdata.t.1$X[i]+beta.b.00[3]*sdata.t.1$XX.3[i]+beta.00[4]*sdata.t.1$Stage[i])*(sdata.t.1$Surv.T[i]^alpha.u))
+        S3<-exp(-exp(beta.b.00[1]+beta.b.00[2]*sdata.t.1$Stage[i])*(sdata.t.1$Surv.T[i]^alpha.u))
+        S.h<-exp(-sdata.t.1$Surv.T[i]/7300)
+        pi<-exp(gamma.b.00[1]+gamma.b.00[2]*sdata.t.1$ZZ[i]+gamma.b.00[3]*sdata.t.1$Stage[i])
+        sdata.t.1$status.1[i]+((1-sdata.t.1$status.1[i])*pi*(S3)/((S.h)+(pi*S3)))
+      })
+      sdata.t.1$Cure<-Wi
+      #surivival
+      my_gmm.b5<-gmm(moments.G1,x=sdata.t.1,t0=c(0,0),type="iterative",wmatrix = "optimal",
+                     method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+      beta.b.001<-my_gmm.b5$coefficients
+      #Cure
+      sdata.t.1.5<-sdata.t.1[CN.02,]
+      my_gmm.b4<-gmm(moments.g.1,x=sdata.t.1.5,t0=c(0,0,0),type="iterative",wmatrix = "optimal",
+                     method = "Nelder-Mead", control = list(reltol = 1e-25, maxit=20000))
+      gamma.b.001<-my_gmm.b4$coefficients
+      #alpha
+      
+      Beta.b<-matrix(beta.b.001,ncol=1)
+      #x<-as.matrix(sdata.t.1[,4:7])
+      #x.1<-rep(1,dim(sdata.t.1)[1])
+      #q.1<-cbind(x.1,x)
+      #alpha.S<--sum(sdata.t.1$status)/sum(Wi*log(sdata.t.1$Surv.T)*(sdata.t.1$status-(sdata.t.1$Surv.T^alpha.u)*exp(q.1%*%Beta.b)))
+      my_gmm.3<-gmm(moments.alpha,x=sdata.t.1,t0=c(alpha.u),optfct=c("nlminb"))
+      alpha.S<-my_gmm.3$coefficients
+      #
+      if(max(abs(beta.b.001[-1]-beta.b.00[-1]))<1e-03&max(abs(gamma.b.001[-1]-gamma.b.00[-1]))<1e-03|K.2>100)
+        break
+      beta.b.00<-beta.b.001
+      gamma.b.00<-gamma.b.001
+      alpha.u<-alpha.S
+      #print(beta.b.001)
+      K.2<-K.2+1
+    }
+      if(abs((beta.b.001[1]/my_gmm.tt[1,4])-1)<1)
+        break
+    }
+  },warning=function(w){},error=function(e){})
+  
+  my_gmm.tt<-rbind(my_gmm.tt,c(gamma.b.001,beta.b.001,alpha.S))
+  print(sqrt(apply(my_gmm.tt,2,var)))
+}
+#
+my_gmm.tt<-my_gmm.tt[-which(abs(my_gmm.tt[,4])>15),]
+
+#estimate
+
+alpha.11
+sqrt(apply(my_gmm.tt,2,var)[8])
+t.a.b<-alpha.11/sqrt(apply(my_gmm.tt,2,var)[8])
+
+2*(1-pnorm(abs(t.a.b)))
+
+Beta.001
+#variance
+beta.V.b<-apply(my_gmm.tt,2,var)[c(4:7)]
+sqrt(beta.V.b)
+#p value
+t.1.b<-Beta.001/sqrt(beta.V.b)
+2*(1-pnorm(abs(t.1.b[1])))
+2*(1-pnorm(abs(t.1.b[2])))
+2*(1-pnorm(abs(t.1.b[3])))
+2*(1-pnorm(abs(t.1.b[4])))
+
+# 
+#estimate
+Gamma.001
+#variance
+gamma.V.b<-apply(my_gmm.tt,2,var)[c(1:3)]
+sqrt(gamma.V.b)
+#p value
+t.2.b<-Gamma.001/sqrt(gamma.V.b)
+
+2*(1-pnorm(abs(t.2.b[1])))
+2*(1-pnorm(abs(t.2.b[2])))
+2*(1-pnorm(abs(t.2.b[3])))
